@@ -324,9 +324,9 @@ if sys.platform == "win32":
         cursor_at_end_of_line = StubScreenBufferInfo(
             dwCursorPosition=COORD(SCREEN_WIDTH - 1, CURSOR_Y)
         )
-        win32_console_getters[
-            "GetConsoleScreenBufferInfo"
-        ].return_value = cursor_at_end_of_line
+        win32_console_getters["GetConsoleScreenBufferInfo"].return_value = (
+            cursor_at_end_of_line
+        )
         term = LegacyWindowsTerm(sys.stdout)
         term.move_cursor_forward()
 
@@ -361,9 +361,9 @@ if sys.platform == "win32":
         cursor_at_start_of_line = StubScreenBufferInfo(
             dwCursorPosition=COORD(0, CURSOR_Y)
         )
-        win32_console_getters[
-            "GetConsoleScreenBufferInfo"
-        ].return_value = cursor_at_start_of_line
+        win32_console_getters["GetConsoleScreenBufferInfo"].return_value = (
+            cursor_at_start_of_line
+        )
         term = LegacyWindowsTerm(sys.stdout)
         term.move_cursor_backward()
         SetConsoleCursorPosition.assert_called_once_with(
@@ -410,3 +410,42 @@ if sys.platform == "win32":
 
         with pytest.raises(AssertionError):
             term.set_title("a" * 255)
+
+    @patch.object(_win32_console, "_SetConsoleMode", return_value=1)
+    def test_set_console_mode_success(_SetConsoleMode):
+        _win32_console.SetConsoleMode(mock.sentinel.handle, 7)
+        _SetConsoleMode.assert_called_once()
+
+    @patch.object(_win32_console, "_SetConsoleMode", return_value=0)
+    def test_set_console_mode_failure(_SetConsoleMode):
+        with pytest.raises(_win32_console.LegacyWindowsError):
+            _win32_console.SetConsoleMode(mock.sentinel.handle, 7)
+
+    @patch.object(_win32_console, "_GetConsoleOutputCP", return_value=850)
+    def test_get_console_output_cp(_GetConsoleOutputCP):
+        assert _win32_console.GetConsoleOutputCP() == 850
+
+    @patch.object(_win32_console, "_SetConsoleOutputCP", return_value=1)
+    def test_set_console_output_cp(_SetConsoleOutputCP):
+        assert _win32_console.SetConsoleOutputCP(65001) is True
+        _SetConsoleOutputCP.assert_called_once_with(65001)
+
+    def test_get_windows_console_features_enables_vt_and_utf8():
+        from rich import _windows
+
+        with patch.object(
+            _windows, "GetStdHandle", return_value=mock.sentinel.handle
+        ), patch.object(_windows, "GetConsoleMode", side_effect=[0, 4]), patch.object(
+            _windows, "SetConsoleMode", return_value=None
+        ) as mock_set_mode, patch.object(
+            _windows, "GetConsoleOutputCP", return_value=850
+        ), patch.object(
+            _windows, "SetConsoleOutputCP", return_value=True
+        ) as mock_set_cp, patch.object(
+            sys, "getwindowsversion", return_value=mock.Mock(major=10, build=19045)
+        ):
+            features = _windows.get_windows_console_features()
+            assert features.vt is True
+            assert features.truecolor is True
+            mock_set_mode.assert_called_once_with(mock.sentinel.handle, 4)
+            mock_set_cp.assert_called_once_with(65001)

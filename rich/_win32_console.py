@@ -114,6 +114,47 @@ def GetConsoleMode(std_handle: wintypes.HANDLE) -> int:
     return console_mode.value
 
 
+_SetConsoleMode = windll.kernel32.SetConsoleMode
+_SetConsoleMode.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+_SetConsoleMode.restype = wintypes.BOOL
+
+
+def SetConsoleMode(std_handle: wintypes.HANDLE, mode: int) -> None:
+    """Sets the input mode of a console's input buffer
+    or the output mode of a console screen buffer.
+
+    Args:
+        std_handle (wintypes.HANDLE): A handle to the console input buffer or the console screen buffer.
+        mode (int): The mode to set.
+
+    Raises:
+        LegacyWindowsError: If any error occurs while calling the Windows console API.
+    """
+    success = bool(_SetConsoleMode(std_handle, wintypes.DWORD(mode)))
+    if not success:
+        raise LegacyWindowsError("Unable to set legacy Windows Console Mode")
+
+
+_GetConsoleOutputCP = windll.kernel32.GetConsoleOutputCP
+_GetConsoleOutputCP.argtypes = []
+_GetConsoleOutputCP.restype = wintypes.UINT
+
+
+def GetConsoleOutputCP() -> int:
+    """Retrieves the output code page used by the console associated with the calling process."""
+    return int(_GetConsoleOutputCP())
+
+
+_SetConsoleOutputCP = windll.kernel32.SetConsoleOutputCP
+_SetConsoleOutputCP.argtypes = [wintypes.UINT]
+_SetConsoleOutputCP.restype = wintypes.BOOL
+
+
+def SetConsoleOutputCP(code_page_id: int) -> bool:
+    """Sets the output code page used by the console associated with the calling process."""
+    return bool(_SetConsoleOutputCP(code_page_id))
+
+
 _FillConsoleOutputCharacterW = windll.kernel32.FillConsoleOutputCharacterW
 _FillConsoleOutputCharacterW.argtypes = [
     wintypes.HANDLE,

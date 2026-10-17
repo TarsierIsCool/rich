@@ -13,8 +13,10 @@ class WindowsConsoleFeatures:
 
 
 try:
+    import atexit
     import ctypes
     from ctypes import LibraryLoader
+    from typing import Optional
 
     if sys.platform == "win32":
         windll = LibraryLoader(ctypes.WinDLL)
@@ -25,8 +27,11 @@ try:
     from rich._win32_console import (
         ENABLE_VIRTUAL_TERMINAL_PROCESSING,
         GetConsoleMode,
+        GetConsoleOutputCP,
         GetStdHandle,
         LegacyWindowsError,
+        SetConsoleMode,
+        SetConsoleOutputCP,
     )
 
 except (AttributeError, ImportError, ValueError):
@@ -36,6 +41,7 @@ except (AttributeError, ImportError, ValueError):
         return features
 
 else:
+    _original_output_cp: Optional[int] = None
 
     def get_windows_console_features() -> WindowsConsoleFeatures:
         """Get windows console features.
@@ -50,6 +56,16 @@ else:
         except LegacyWindowsError:
             console_mode = 0
             success = False
+
+        if success and not (console_mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING):
+            try:
+                SetConsoleMode(
+                    handle, console_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING
+                )
+                console_mode = GetConsoleMode(handle)
+            except LegacyWindowsError:
+                pass
+
         vt = bool(success and console_mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING)
         truecolor = False
         if vt:
@@ -57,6 +73,19 @@ else:
             truecolor = win_version.major > 10 or (
                 win_version.major == 10 and win_version.build >= 15063
             )
+
+        if success:
+            global _original_output_cp
+            try:
+                cp = GetConsoleOutputCP()
+                if cp and cp != 65001:
+                    if _original_output_cp is None:
+                        _original_output_cp = cp
+                        atexit.register(SetConsoleOutputCP, cp)
+                    SetConsoleOutputCP(65001)
+            except Exception:
+                pass
+
         features = WindowsConsoleFeatures(vt=vt, truecolor=truecolor)
         return features
 
